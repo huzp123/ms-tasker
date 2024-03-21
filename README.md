@@ -1,2 +1,2 @@
 # ms-tasker
-Millisecond-level scheduled task executor
+A lightweight millisecond-level scheduled task executor developed in C++ language, currently only supports Linux systems
