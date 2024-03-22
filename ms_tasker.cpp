@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <thread>
 #include <chrono>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fstream>
@@ -11,6 +12,9 @@
 #include <vector>
 
 using namespace std;
+
+const char* pid_file = "./ms-tasker.pid";
+int ppid = -1, fd = -1;
 
 map<string, map<string, string> > ini_parser(const string &filename)
 {
@@ -116,29 +120,53 @@ void work_process(map<string, map<string, string> > &settings)
     }
 }
 
+void exit_handler(int signum)
+{
+    close(fd);
+    remove(pid_file);
+    exit(0);
+}
+
 int main(int argc, char* argv[])
 {
+    if (ppid < 0) {
+        fd = open(pid_file, O_CREAT | O_EXCL | O_RDWR, 0666);
+        if (fd < 0) {
+            cerr << "ms-tasker process is running" << endl;
+            return 0;
+        }
+        ofstream ofs(pid_file);
+        ofs << getpid();
+        ofs.close();
+        ppid = getpid();
+    }
     string ini_file;
-    if(argc < 2){
+    if(argc < 2) {
         ini_file = "./config.ini";
     }else {
         ini_file = argv[1];
     }
     
+    signal(SIGTERM, exit_handler);
+    signal(SIGKILL, exit_handler);
+    signal(SIGINT, exit_handler);
+    signal(SIGQUIT, exit_handler);
+    
     map<string, map<string, string> > settings = ini_parser(ini_file);
     if(settings.size() < 1){return 0;}
     
-    while(true){
+    while(true) {
         pid_t pid = fork();
-        if(pid == -1){
+        if(pid == -1) {
             cerr << "worker process start failed." << endl;
-            return 1;
+            kill(ppid, SIGINT);
+            return 0;
         }else if(pid > 0) {
             wait(nullptr);
         }else {
             work_process(settings);
         }
     }
-
+    
     return 0;
 }
