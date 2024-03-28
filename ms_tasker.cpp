@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <pwd.h>
 #include <fstream>
 #include <sstream>
 #include <map>
@@ -14,7 +15,8 @@
 using namespace std;
 
 const char* pid_file = "./ms-tasker.pid";
-int ppid = -1, fd = -1;
+int fd = -1;
+pid_t pid = -1, ppid = -1;
 
 map<string, map<string, string> > ini_parser(const string &filename)
 {
@@ -33,7 +35,7 @@ map<string, map<string, string> > ini_parser(const string &filename)
     while(getline(file, line))
     {
         if(line.empty()) {continue;}
-        if(line[0] == '#') {continue;}
+        if(line[0] == '#' || line[0] == ';') {continue;}
         if(line[0] == '['){
             if(section_name.length() > 0) {
                 ini[section_name] = section_value;
@@ -122,6 +124,9 @@ void work_process(map<string, map<string, string> > &settings)
 
 void exit_handler(int signum)
 {
+    if(getpid() != ppid) exit(0);
+
+    kill(pid, SIGKILL);
     close(fd);
     remove(pid_file);
     exit(0);
@@ -156,10 +161,9 @@ int main(int argc, char* argv[])
     if(settings.size() < 1){return 0;}
     
     while(true) {
-        pid_t pid = fork();
+        pid = fork();
         if(pid == -1) {
             cerr << "worker process start failed." << endl;
-            kill(ppid, SIGINT);
             return 0;
         }else if(pid > 0) {
             wait(nullptr);
